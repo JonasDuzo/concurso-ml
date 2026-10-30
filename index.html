@@ -79,9 +79,20 @@ function start(mode,t){
   else if(mode=="random")ids=shuffle(Q.map(q=>q.id)).slice(0,20);
   else if(mode=="exam")ids=shuffle(Q.map(q=>q.id)).slice(0,30);
   else ids=Q.map(q=>q.id);
-  R={mode,t,ids,i:0,ans:{},exam:mode=="exam",end:Date.now()+3600e3};
+  R={mode,t,ids,i:0,ans:{},ordem:{},exam:mode=="exam",end:Date.now()+3600e3};
+  prepararAlternativas();
   if(R.exam){clearInterval(timer);timer=setInterval(tick,1000)}
   quiz();
+}
+function prepararAlternativas(){
+  // Sorteia a ordem uma única vez por questão nesta tentativa.
+  // Assim, ao voltar para uma questão, as alternativas permanecem iguais.
+  R.ids.forEach(id=>{
+    R.ordem[id]=shuffle(Q[id].o.map((_,i)=>i));
+  });
+}
+function indiceCorreto(id){
+  return R.ordem[id].indexOf(Q[id].a);
 }
 function tick(){const e=document.getElementById("tm");if(!R||!R.exam){clearInterval(timer);return}const s=Math.max(0,(R.end-Date.now())/1000|0);if(e)e.textContent=Math.floor(s/60)+":"+String(s%60).padStart(2,"0");if(s<=0)finish()}
 function quiz(){
@@ -90,8 +101,8 @@ function quiz(){
   $.innerHTML=`<div class="top"><div class="row"><button class="link" onclick="if(confirm('Sair deste treino?'))home()">← Sair</button><span class="mu">${esc(title)} · ${R.i+1}/${R.ids.length}</span>${R.exam?'<b id="tm"></b>':`<button class="link" onclick="flag(${id})">${x.f?"🔖":"🏷️"}</button>`}</div><div class="bar"><i style="width:${(R.i+(done?1:0))/R.ids.length*100}%;background:var(--pr)"></i></div></div>
   <span class="tag">${esc(N[q.t])}</span>${x.w?` <span class="tag">errou ${x.w}x</span>`:""}
   <div class="q">${esc(q.q)}</div>
-  ${q.o.map((o,i)=>{let c="opt";if(done){if(i==q.a)c+=" ok";else if(i==a)c+=" er"}else if(i==a)c+=" sel";return `<button class="${c}" onclick="pick(${id},${i})"><b>${"abcd"[i]})</b> ${esc(o)}</button>`}).join("")}
-  ${done?`<div class="fb ${a==q.a?"ok":"er"}">${a==q.a?"✔ Correto!":"✘ Errado. Resposta certa: "+"abcd"[q.a]+")"}</div>`:""}
+  ${R.ordem[id].map((original,i)=>{const o=q.o[original],correto=indiceCorreto(id);let c="opt";if(done){if(i==correto)c+=" ok";else if(i==a)c+=" er"}else if(i==a)c+=" sel";return `<button class="${c}" onclick="pick(${id},${i})"><b>${"abcd"[i]})</b> ${esc(o)}</button>`}).join("")}
+  ${done?`<div class="fb ${a==indiceCorreto(id)?"ok":"er"}">${a==indiceCorreto(id)?"✔ Correto!":"✘ Errado. Resposta certa: "+"abcd"[indiceCorreto(id)]+")"}</div>`:""}
   <div class="grid" style="margin-top:14px"><button class="btn sec" onclick="nav(-1)" ${R.i?"":"disabled"}>← Anterior</button>
   ${R.i<R.ids.length-1?`<button class="btn" onclick="nav(1)">Próxima →</button>`:`<button class="btn" onclick="finish()">Finalizar</button>`}</div>`;
   if(R.exam)tick();
@@ -104,18 +115,18 @@ function pick(id,i){
   if(!R.exam)record(id,i);
   quiz();
 }
-function record(id,i){const x=st(id),ok=i==Q[id].a;if(ok){x.r++;x.s++}else{x.w++;x.s=0}x.l=ok;save()}
+function record(id,i){const x=st(id),ok=R.ordem[id][i]===Q[id].a;if(ok){x.r++;x.s++}else{x.w++;x.s=0}x.l=ok;save()}
 function finish(){
   clearInterval(timer);
   if(R.exam)R.ids.forEach(id=>{if(R.ans[id]!==undefined)record(id,R.ans[id])});
-  const tot=R.ids.length,ok=R.ids.filter(id=>R.ans[id]===Q[id].a).length,un=R.ids.filter(id=>R.ans[id]===undefined).length;
-  const wrong=R.ids.filter(id=>R.ans[id]!==undefined&&R.ans[id]!==Q[id].a);
+  const tot=R.ids.length,ok=R.ids.filter(id=>R.ans[id]!==undefined&&R.ordem[id][R.ans[id]]===Q[id].a).length,un=R.ids.filter(id=>R.ans[id]===undefined).length;
+  const wrong=R.ids.filter(id=>R.ans[id]!==undefined&&R.ordem[id][R.ans[id]]!==Q[id].a);
   $.innerHTML=`<h1>Resultado</h1><div class="card stat"><b style="font-size:40px">${pct(ok,tot)}%</b><div class="mu">${ok} de ${tot} corretas${un?` · ${un} sem resposta`:""}</div></div>
-  ${wrong.length?`<h2>Para revisar (${wrong.length})</h2>`+wrong.map(id=>{const q=Q[id];return `<div class="card"><div class="mu">${esc(N[q.t])}</div><div style="font-weight:600;margin:4px 0">${esc(q.q)}</div><div style="color:var(--er)">Sua resposta: ${"abcd"[R.ans[id]]}) ${esc(q.o[R.ans[id]])}</div><div style="color:var(--ok)">Correta: ${"abcd"[q.a]}) ${esc(q.o[q.a])}</div></div>`}).join(""):`<div class="card">Nenhum erro. 🎉</div>`}
+  ${wrong.length?`<h2>Para revisar (${wrong.length})</h2>`+wrong.map(id=>{const q=Q[id],marcada=R.ordem[id][R.ans[id]],correta=q.a;return `<div class="card"><div class="mu">${esc(N[q.t])}</div><div style="font-weight:600;margin:4px 0">${esc(q.q)}</div><div style="color:var(--er)">Sua resposta: ${"abcd"[R.ans[id]]}) ${esc(q.o[marcada])}</div><div style="color:var(--ok)">Correta: ${"abcd"[indiceCorreto(id)]}) ${esc(q.o[correta])}</div></div>`}).join(""):`<div class="card">Nenhum erro. 🎉</div>`}
   ${un?`<h2>Sem resposta (${un})</h2><div class="mu">Elas não contam como erro. Veja no modo “Ainda não vistas”.</div>`:""}
   <div class="grid" style="margin-top:14px"><button class="btn sec" onclick="home()">Início</button>${wrong.length?`<button class="btn" onclick="redo()">Refazer erradas</button>`:`<button class="btn" onclick="home()">Concluir</button>`}</div>`;
   R.wrong=wrong;
 }
-function redo(){const w=R.wrong;R={mode:"missed",ids:shuffle(w),i:0,ans:{},exam:false};quiz();scrollTo(0,0)}
+function redo(){const w=R.wrong;R={mode:"missed",ids:shuffle(w),i:0,ans:{},ordem:{},exam:false};prepararAlternativas();quiz();scrollTo(0,0)}
 home();
 </script></body></html>
