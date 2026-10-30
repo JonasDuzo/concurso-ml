@@ -52,7 +52,7 @@ function home(){
   const R_=Q.reduce((a,q)=>a+(S[q.id]?S[q.id].r:0),0),W_=Q.reduce((a,q)=>a+(S[q.id]?S[q.id].w:0),0);
   const missed=Q.filter(q=>isMissed(q.id)),unseen=Q.filter(q=>!S[q.id]||S[q.id].r+S[q.id].w==0),flag=Q.filter(q=>S[q.id]&&S[q.id].f);
   const mastered=Q.filter(q=>S[q.id]&&S[q.id].w>0&&S[q.id].s>=2).length;
-  $.innerHTML=`<div class="row"><div><h1>📘 Simulado ML</h1><div class="mu">Concurso de Professor · Aprendizado de Máquina</div></div><button class="link" onclick="theme()">◐</button></div>
+  $.innerHTML=`<div class="row"><div><h1>Simulado ML</h1><div class="mu">Concurso de Professor · Aprendizado de Máquina</div></div><button class="link" onclick="theme()">◐</button></div>
   <div class="card grid" style="grid-template-columns:repeat(4,1fr)"><div class="stat"><b>${Q.length}</b><span class="mu">questões</span></div><div class="stat"><b>${seen.length}</b><span class="mu">vistas</span></div><div class="stat"><b>${pct(R_,R_+W_)}%</b><span class="mu">acertos</span></div><div class="stat"><b>${missed.length}</b><span class="mu">a revisar</span></div></div>
   <h2>Modos de treino</h2><div class="grid">
   <button class="mode" onclick="start('missed')" ${missed.length?"":"disabled"}><b>🎯 Minhas falhas</b><span>${missed.length} questões (mais erradas primeiro)</span></button>
@@ -85,10 +85,22 @@ function start(mode,t){
   quiz();
 }
 function prepararAlternativas(){
-  // Sorteia a ordem uma única vez por questão nesta tentativa.
-  // Assim, ao voltar para uma questão, as alternativas permanecem iguais.
+  // Sorteia a ordem das alternativas em cada tentativa.
+  // A posição da resposta correta não se repete em tentativas consecutivas.
   R.ids.forEach(id=>{
-    R.ordem[id]=shuffle(Q[id].o.map((_,i)=>i));
+    const ordem=shuffle(Q[id].o.map((_,i)=>i));
+    const correta=Q[id].a;
+    const chave="ml_ultima_posicao_correta_"+id;
+    let anterior=null;
+    try{anterior=localStorage.getItem(chave); }catch(e){}
+    let posicao=ordem.indexOf(correta);
+    if(anterior!==null && posicao===Number(anterior) && ordem.length>1){
+      const outra=(posicao+1+Math.floor(Math.random()*(ordem.length-1)))%ordem.length;
+      [ordem[posicao],ordem[outra]]=[ordem[outra],ordem[posicao]];
+      posicao=outra;
+    }
+    R.ordem[id]=ordem;
+    try{localStorage.setItem(chave,String(posicao));}catch(e){}
   });
 }
 function indiceCorreto(id){
